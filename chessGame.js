@@ -18,23 +18,32 @@ class ChessGame {
         this.isInCheck = { white: false, black: false };
         this.gameOver = false;
         this.gameStatus = '';
-        
+
         // Special move flags
         this.castlingRights = {
             white: { kingSide: true, queenSide: true },
             black: { kingSide: true, queenSide: true }
         };
-        
+
         this.enPassantTarget = null; // Square that can be captured via en passant
-        
+
         // For pawn promotion
         this.promotionPending = false;
         this.promotionMove = null;
-        
+
         this.setupBoard();
         this.setupEventListeners();
+
+        // Gespeicherten Spielstand laden, falls vorhanden
+        if (this.hasSavedGame()) {
+            const loadResult = this.loadGameFromLocalStorage();
+            if (loadResult) {
+                // Zeige Meldung über geladenes Spiel an
+                this.showTemporaryMessage('Saved game loaded');
+            }
+        }
     }
-    
+
     /**
      * Create a deep copy of the chess board
      * @param {Array} board - 2D array representing the chess board
@@ -43,7 +52,7 @@ class ChessGame {
     deepCopyBoard(board) {
         return board.map(row => [...row]);
     }
-    
+
     /**
      * Create the initial chess board with pieces in starting positions
      * @returns {Array} - 2D array representing the starting position
@@ -60,51 +69,51 @@ class ChessGame {
             ['rook-white', 'knight-white', 'bishop-white', 'queen-white', 'king-white', 'bishop-white', 'knight-white', 'rook-white']
         ];
     }
-    
+
     /**
      * Set up the visual chess board with pieces and coordinates
      */
     setupBoard() {
         const chessboard = document.getElementById('chessboard');
         chessboard.innerHTML = '';
-        
+
         const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
         const ranks = ['8', '7', '6', '5', '4', '3', '2', '1'];
-        
+
         // Mapping function to convert our piece names to standard notation
         const getPieceImage = (piece) => {
             if (!piece) return null;
-            
+
             const pieceMap = {
-                'pawn-white': 'wP', 'rook-white': 'wR', 'knight-white': 'wN', 
+                'pawn-white': 'wP', 'rook-white': 'wR', 'knight-white': 'wN',
                 'bishop-white': 'wB', 'queen-white': 'wQ', 'king-white': 'wK',
-                'pawn-black': 'bP', 'rook-black': 'bR', 'knight-black': 'bN', 
+                'pawn-black': 'bP', 'rook-black': 'bR', 'knight-black': 'bN',
                 'bishop-black': 'bB', 'queen-black': 'bQ', 'king-black': 'bK'
             };
-            
+
             return pieceMap[piece];
         };
-        
+
         for (let row = 0; row < 8; row++) {
             for (let col = 0; col < 8; col++) {
                 const square = document.createElement('div');
                 square.classList.add('square');
-                
+
                 // Determine actual board position based on orientation
                 let actualRow = this.boardOrientation === 'white' ? row : 7 - row;
                 let actualCol = this.boardOrientation === 'white' ? col : 7 - col;
-                
+
                 // Set square color
                 if ((row + col) % 2 === 0) {
                     square.classList.add('light');
                 } else {
                     square.classList.add('dark');
                 }
-                
+
                 // Set data attributes for position
                 square.dataset.row = actualRow;
                 square.dataset.col = actualCol;
-                
+
                 // Add coordinates
                 if (col === 0) {
                     const rankCoord = document.createElement('div');
@@ -112,14 +121,14 @@ class ChessGame {
                     rankCoord.textContent = ranks[actualRow];
                     square.appendChild(rankCoord);
                 }
-                
+
                 if (row === 7) {
                     const fileCoord = document.createElement('div');
                     fileCoord.classList.add('coordinates', 'file');
                     fileCoord.textContent = files[actualCol];
                     square.appendChild(fileCoord);
                 }
-                
+
                 // Add piece if present
                 const piece = this.board[actualRow][actualCol];
                 if (piece) {
@@ -128,7 +137,7 @@ class ChessGame {
                     const pieceFileName = getPieceImage(piece);
                     pieceElement.style.backgroundImage = `url('img/${pieceFileName}.png')`;
                     square.appendChild(pieceElement);
-                    
+
                     // Highlight king if in check
                     if (piece === 'king-white' && this.isInCheck.white) {
                         square.classList.add('check');
@@ -137,16 +146,16 @@ class ChessGame {
                         square.classList.add('check');
                     }
                 }
-                
+
                 chessboard.appendChild(square);
             }
         }
-        
+
         this.updateTurnIndicator();
         this.updateCapturedPieces();
         this.updateGameStatus();
     }
-    
+
     /**
      * Set up event listeners for user interactions
      */
@@ -154,86 +163,86 @@ class ChessGame {
         const chessboard = document.getElementById('chessboard');
         chessboard.addEventListener('click', (e) => {
             if (this.gameOver || this.promotionPending) return;
-            
+
             const square = e.target.closest('.square');
             if (!square) return;
-            
+
             const row = parseInt(square.dataset.row);
             const col = parseInt(square.dataset.col);
             this.handleSquareClick(row, col);
         });
-        
+
         document.getElementById('new-game').addEventListener('click', () => {
             this.resetGame();
         });
-        
+
         document.getElementById('flip-board').addEventListener('click', () => {
             this.flipBoard();
         });
-        
+
         document.getElementById('first-move').addEventListener('click', () => {
             this.goToMove(0);
         });
-        
+
         document.getElementById('prev-move').addEventListener('click', () => {
             this.goToMove(Math.max(0, this.currentMoveIndex - 1));
         });
-        
+
         document.getElementById('next-move').addEventListener('click', () => {
             this.goToMove(Math.min(this.moveHistory.length, this.currentMoveIndex + 1));
         });
-        
+
         document.getElementById('last-move').addEventListener('click', () => {
             this.goToMove(this.moveHistory.length);
         });
-        
+
         // Add click event for notation rows
         document.getElementById('notation-body').addEventListener('click', (e) => {
             const row = e.target.closest('tr');
             if (!row || !row.dataset.moveIndex) return;
-            
+
             const moveIndex = parseInt(row.dataset.moveIndex);
             this.goToMove(moveIndex);
         });
-        
+
         // Setup promotion modal event listeners
         document.getElementById('promotion-pieces').addEventListener('click', (e) => {
             const piece = e.target.closest('.promotion-piece');
             if (!piece || !piece.dataset.piece) return;
-            
+
             this.completePromotion(piece.dataset.piece);
         });
-        
+
         // PGN save and load
         document.getElementById('save-pgn').addEventListener('click', () => {
             const pgnContent = generatePGN(
-                this.moveHistory, 
-                this.gameStatus, 
+                this.moveHistory,
+                this.gameStatus,
                 this.currentPlayer,
                 document.getElementById('notation-body')
             );
             savePGN(pgnContent);
         });
-        
+
         document.getElementById('load-pgn-btn').addEventListener('click', () => {
             document.getElementById('pgn-file-input').click();
         });
-        
+
         document.getElementById('pgn-file-input').addEventListener('change', (e) => {
             if (e.target.files.length > 0) {
                 const file = e.target.files[0];
                 const reader = new FileReader();
-                
+
                 reader.onload = (event) => {
                     const pgnText = event.target.result;
                     loadPGN(pgnText, this);
                 };
-                
+
                 reader.readAsText(file);
             }
         });
     }
-    
+
     /**
      * Handle clicks on chess squares
      * @param {Number} row - Row index (0-7)
@@ -243,19 +252,19 @@ class ChessGame {
         // If a piece is already selected
         if (this.selectedPiece) {
             const [selectedRow, selectedCol] = this.selectedPiece;
-            
+
             // Check if the clicked square is in possible moves
             const moveIndex = this.possibleMoves.findIndex(
                 move => move[0] === row && move[1] === col
             );
-            
+
             if (moveIndex !== -1) {
                 // Special case for pawn promotion
                 const piece = this.board[selectedRow][selectedCol];
                 const isPawn = piece && piece.startsWith('pawn');
-                const isPromotionRank = (piece.endsWith('white') && row === 0) || 
-                                      (piece.endsWith('black') && row === 7);
-                
+                const isPromotionRank = (piece.endsWith('white') && row === 0) ||
+                    (piece.endsWith('black') && row === 7);
+
                 if (isPawn && isPromotionRank) {
                     this.promptPromotion(selectedRow, selectedCol, row, col);
                 } else {
@@ -264,7 +273,7 @@ class ChessGame {
                         // Truncate move history and boardStates at current position
                         this.truncateMoveHistory();
                     }
-                    
+
                     // Make the move
                     this.makeMove(selectedRow, selectedCol, row, col);
                 }
@@ -287,7 +296,7 @@ class ChessGame {
             }
         }
     }
-    
+
     /**
      * Select a piece and calculate its legal moves
      * @param {Number} row - Row index (0-7)
@@ -298,7 +307,7 @@ class ChessGame {
         this.possibleMoves = this.calculateLegalMoves(row, col);
         this.highlightSquares();
     }
-    
+
     /**
      * Clear the current piece selection
      */
@@ -307,13 +316,13 @@ class ChessGame {
         this.possibleMoves = [];
         this.clearHighlights();
     }
-    
+
     /**
      * Highlight the selected piece and its possible moves
      */
     highlightSquares() {
         this.clearHighlights();
-        
+
         // Highlight selected piece
         if (this.selectedPiece) {
             const [row, col] = this.selectedPiece;
@@ -321,7 +330,7 @@ class ChessGame {
             if (selectedSquare) {
                 selectedSquare.classList.add('highlighted');
             }
-            
+
             // Highlight possible moves
             this.possibleMoves.forEach(([moveRow, moveCol]) => {
                 const moveSquare = document.querySelector(`.square[data-row="${moveRow}"][data-col="${moveCol}"]`);
@@ -330,7 +339,7 @@ class ChessGame {
                 }
             });
         }
-        
+
         // Highlight kings in check
         for (const color of ['white', 'black']) {
             if (this.isInCheck[color]) {
@@ -342,7 +351,7 @@ class ChessGame {
             }
         }
     }
-    
+
     /**
      * Clear all highlights from the board
      */
@@ -351,7 +360,7 @@ class ChessGame {
             square.classList.remove('highlighted', 'possible-move', 'check');
         });
     }
-    
+
     /**
      * Calculate all possible moves for a piece
      * @param {Number} row - Row index (0-7)
@@ -361,10 +370,10 @@ class ChessGame {
     calculatePossibleMoves(row, col) {
         const piece = this.board[row][col];
         if (!piece) return [];
-        
+
         const [type, color] = piece.split('-');
         const moves = [];
-        
+
         switch (type) {
             case 'pawn':
                 this.calculatePawnMoves(row, col, color, moves);
@@ -385,10 +394,10 @@ class ChessGame {
                 this.calculateKingMoves(row, col, color, moves);
                 break;
         }
-        
+
         return moves;
     }
-    
+
     /**
      * Filter moves that would leave the king in check
      * @param {Number} row - Row index (0-7)
@@ -398,21 +407,21 @@ class ChessGame {
     calculateLegalMoves(row, col) {
         const piece = this.board[row][col];
         if (!piece) return [];
-        
+
         const [, color] = piece.split('-');
         const possibleMoves = this.calculatePossibleMoves(row, col);
         const legalMoves = [];
-        
+
         // Test each move to see if it leaves the king in check
         for (const [toRow, toCol] of possibleMoves) {
             // Make a temporary move
             const originalBoard = this.deepCopyBoard(this.board);
             const capturedPiece = this.board[toRow][toCol];
-            
+
             // Special case for en passant
             let capturedEnPassantPiece = null;
             let enPassantCapturePos = null;
-            
+
             if (piece.startsWith('pawn') && col !== toCol && !capturedPiece) {
                 // This is an en passant capture
                 const enPassantRow = color === 'white' ? toRow + 1 : toRow - 1;
@@ -420,55 +429,55 @@ class ChessGame {
                 enPassantCapturePos = [enPassantRow, toCol];
                 this.board[enPassantRow][toCol] = null;
             }
-            
+
             // Move piece for testing
             this.board[toRow][toCol] = piece;
             this.board[row][col] = null;
-            
+
             // Special case for castling - also move the rook
             let rookOriginalPos = null;
             let rookNewPos = null;
-            
+
             if (piece.startsWith('king') && Math.abs(col - toCol) > 1) {
                 // This is castling
                 const rookCol = toCol === 6 ? 7 : 0; // Kingside or queenside
                 const newRookCol = toCol === 6 ? 5 : 3; // Where rook goes
-                
+
                 rookOriginalPos = [row, rookCol];
                 rookNewPos = [row, newRookCol];
-                
+
                 const rook = this.board[row][rookCol];
                 this.board[row][newRookCol] = rook;
                 this.board[row][rookCol] = null;
             }
-            
+
             // Update king position if moving king
             let originalKingPos = null;
             if (piece.startsWith('king')) {
                 originalKingPos = [...this.kingPositions[color]];
                 this.kingPositions[color] = [toRow, toCol];
             }
-            
+
             // Check if king is in check after the move
             const inCheck = this.isKingInCheck(color);
-            
+
             // Restore the board
             this.board = this.deepCopyBoard(originalBoard);
-            
+
             // Restore king position if it was moved
             if (originalKingPos) {
                 this.kingPositions[color] = originalKingPos;
             }
-            
+
             // If the move doesn't leave king in check, it's legal
             if (!inCheck) {
                 legalMoves.push([toRow, toCol]);
             }
         }
-        
+
         return legalMoves;
     }
-    
+
     /**
      * Calculate possible moves for a pawn
      * @param {Number} row - Row index (0-7)
@@ -479,39 +488,39 @@ class ChessGame {
     calculatePawnMoves(row, col, color, moves) {
         const direction = color === 'white' ? -1 : 1;
         const startingRow = color === 'white' ? 6 : 1;
-        
+
         // Forward move
         if (this.isInBounds(row + direction, col) && !this.board[row + direction][col]) {
             moves.push([row + direction, col]);
-            
+
             // Double forward move from starting position
             if (row === startingRow && !this.board[row + 2 * direction][col]) {
                 moves.push([row + 2 * direction, col]);
             }
         }
-        
+
         // Capture moves (including en passant)
         for (const colOffset of [-1, 1]) {
             const newRow = row + direction;
             const newCol = col + colOffset;
-            
+
             if (this.isInBounds(newRow, newCol)) {
                 const targetPiece = this.board[newRow][newCol];
-                
+
                 // Normal capture
                 if (targetPiece && !targetPiece.endsWith(color)) {
                     moves.push([newRow, newCol]);
                 }
                 // En passant capture
-                else if (this.enPassantTarget && 
-                        newRow === this.enPassantTarget[0] && 
-                        newCol === this.enPassantTarget[1]) {
+                else if (this.enPassantTarget &&
+                    newRow === this.enPassantTarget[0] &&
+                    newCol === this.enPassantTarget[1]) {
                     moves.push([newRow, newCol]);
                 }
             }
         }
     }
-    
+
     /**
      * Calculate possible moves for a rook
      * @param {Number} row - Row index (0-7)
@@ -521,11 +530,11 @@ class ChessGame {
      */
     calculateRookMoves(row, col, color, moves) {
         const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]]; // right, down, left, up
-        
+
         for (const [rowDir, colDir] of directions) {
             let currentRow = row + rowDir;
             let currentCol = col + colDir;
-            
+
             while (this.isInBounds(currentRow, currentCol)) {
                 const targetPiece = this.board[currentRow][currentCol];
                 if (!targetPiece) {
@@ -536,13 +545,13 @@ class ChessGame {
                     }
                     break;
                 }
-                
+
                 currentRow += rowDir;
                 currentCol += colDir;
             }
         }
     }
-    
+
     /**
      * Calculate possible moves for a knight
      * @param {Number} row - Row index (0-7)
@@ -555,11 +564,11 @@ class ChessGame {
             [-2, -1], [-2, 1], [-1, -2], [-1, 2],
             [1, -2], [1, 2], [2, -1], [2, 1]
         ];
-        
+
         for (const [rowOffset, colOffset] of offsets) {
             const newRow = row + rowOffset;
             const newCol = col + colOffset;
-            
+
             if (this.isInBounds(newRow, newCol)) {
                 const targetPiece = this.board[newRow][newCol];
                 if (!targetPiece || !targetPiece.endsWith(color)) {
@@ -568,7 +577,7 @@ class ChessGame {
             }
         }
     }
-    
+
     /**
      * Calculate possible moves for a bishop
      * @param {Number} row - Row index (0-7)
@@ -578,11 +587,11 @@ class ChessGame {
      */
     calculateBishopMoves(row, col, color, moves) {
         const directions = [[1, 1], [1, -1], [-1, 1], [-1, -1]]; // down-right, down-left, up-right, up-left
-        
+
         for (const [rowDir, colDir] of directions) {
             let currentRow = row + rowDir;
             let currentCol = col + colDir;
-            
+
             while (this.isInBounds(currentRow, currentCol)) {
                 const targetPiece = this.board[currentRow][currentCol];
                 if (!targetPiece) {
@@ -593,13 +602,13 @@ class ChessGame {
                     }
                     break;
                 }
-                
+
                 currentRow += rowDir;
                 currentCol += colDir;
             }
         }
     }
-    
+
     /**
      * Calculate possible moves for a queen
      * @param {Number} row - Row index (0-7)
@@ -611,7 +620,7 @@ class ChessGame {
         this.calculateRookMoves(row, col, color, moves);
         this.calculateBishopMoves(row, col, color, moves);
     }
-    
+
     /**
      * Calculate possible moves for a king
      * @param {Number} row - Row index (0-7)
@@ -625,12 +634,12 @@ class ChessGame {
             [0, -1], [0, 1],
             [1, -1], [1, 0], [1, 1]
         ];
-        
+
         // Normal king moves
         for (const [rowOffset, colOffset] of offsets) {
             const newRow = row + rowOffset;
             const newCol = col + colOffset;
-            
+
             if (this.isInBounds(newRow, newCol)) {
                 const targetPiece = this.board[newRow][newCol];
                 if (!targetPiece || !targetPiece.endsWith(color)) {
@@ -638,38 +647,38 @@ class ChessGame {
                 }
             }
         }
-        
+
         // Castling moves
         if (this.canCastle(row, col, color)) {
             // Check kingside castling
-            if (this.castlingRights[color].kingSide && 
-                !this.board[row][col+1] && 
-                !this.board[row][col+2]) {
-                
+            if (this.castlingRights[color].kingSide &&
+                !this.board[row][col + 1] &&
+                !this.board[row][col + 2]) {
+
                 // Check if squares are attacked
-                if (!this.isSquareAttacked(row, col, color) && 
-                    !this.isSquareAttacked(row, col+1, color) && 
-                    !this.isSquareAttacked(row, col+2, color)) {
-                    moves.push([row, col+2]);
+                if (!this.isSquareAttacked(row, col, color) &&
+                    !this.isSquareAttacked(row, col + 1, color) &&
+                    !this.isSquareAttacked(row, col + 2, color)) {
+                    moves.push([row, col + 2]);
                 }
             }
-            
+
             // Check queenside castling
-            if (this.castlingRights[color].queenSide && 
-                !this.board[row][col-1] && 
-                !this.board[row][col-2] && 
-                !this.board[row][col-3]) {
-                
+            if (this.castlingRights[color].queenSide &&
+                !this.board[row][col - 1] &&
+                !this.board[row][col - 2] &&
+                !this.board[row][col - 3]) {
+
                 // Check if squares are attacked
-                if (!this.isSquareAttacked(row, col, color) && 
-                    !this.isSquareAttacked(row, col-1, color) && 
-                    !this.isSquareAttacked(row, col-2, color)) {
-                    moves.push([row, col-2]);
+                if (!this.isSquareAttacked(row, col, color) &&
+                    !this.isSquareAttacked(row, col - 1, color) &&
+                    !this.isSquareAttacked(row, col - 2, color)) {
+                    moves.push([row, col - 2]);
                 }
             }
         }
     }
-    
+
     /**
      * Check if castling is allowed
      * @param {Number} row - King row index (0-7)
@@ -687,7 +696,7 @@ class ChessGame {
         }
         return false;
     }
-    
+
     /**
      * Check if a square is under attack
      * @param {Number} row - Row index (0-7)
@@ -697,13 +706,13 @@ class ChessGame {
      */
     isSquareAttacked(row, col, defendingColor) {
         const attackingColor = defendingColor === 'white' ? 'black' : 'white';
-        
+
         // Check attacks from pawns
         const pawnDirections = defendingColor === 'white' ? [[1, -1], [1, 1]] : [[-1, -1], [-1, 1]];
         for (const [rowDir, colDir] of pawnDirections) {
             const checkRow = row + rowDir;
             const checkCol = col + colDir;
-            
+
             if (this.isInBounds(checkRow, checkCol)) {
                 const piece = this.board[checkRow][checkCol];
                 if (piece === `pawn-${attackingColor}`) {
@@ -711,17 +720,17 @@ class ChessGame {
                 }
             }
         }
-        
+
         // Check attacks from knights
         const knightOffsets = [
             [-2, -1], [-2, 1], [-1, -2], [-1, 2],
             [1, -2], [1, 2], [2, -1], [2, 1]
         ];
-        
+
         for (const [rowOffset, colOffset] of knightOffsets) {
             const checkRow = row + rowOffset;
             const checkCol = col + colOffset;
-            
+
             if (this.isInBounds(checkRow, checkCol)) {
                 const piece = this.board[checkRow][checkCol];
                 if (piece === `knight-${attackingColor}`) {
@@ -729,18 +738,18 @@ class ChessGame {
                 }
             }
         }
-        
+
         // Check attacks from king
         const kingOffsets = [
             [-1, -1], [-1, 0], [-1, 1],
             [0, -1], [0, 1],
             [1, -1], [1, 0], [1, 1]
         ];
-        
+
         for (const [rowOffset, colOffset] of kingOffsets) {
             const checkRow = row + rowOffset;
             const checkCol = col + colOffset;
-            
+
             if (this.isInBounds(checkRow, checkCol)) {
                 const piece = this.board[checkRow][checkCol];
                 if (piece === `king-${attackingColor}`) {
@@ -748,13 +757,13 @@ class ChessGame {
                 }
             }
         }
-        
+
         // Check attacks from rooks and queens (horizontal and vertical)
         const straightDirections = [[0, 1], [1, 0], [0, -1], [-1, 0]];
         for (const [rowDir, colDir] of straightDirections) {
             let checkRow = row + rowDir;
             let checkCol = col + colDir;
-            
+
             while (this.isInBounds(checkRow, checkCol)) {
                 const piece = this.board[checkRow][checkCol];
                 if (piece) {
@@ -767,13 +776,13 @@ class ChessGame {
                 checkCol += colDir;
             }
         }
-        
+
         // Check attacks from bishops and queens (diagonal)
         const diagonalDirections = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
         for (const [rowDir, colDir] of diagonalDirections) {
             let checkRow = row + rowDir;
             let checkCol = col + colDir;
-            
+
             while (this.isInBounds(checkRow, checkCol)) {
                 const piece = this.board[checkRow][checkCol];
                 if (piece) {
@@ -786,10 +795,10 @@ class ChessGame {
                 checkCol += colDir;
             }
         }
-        
+
         return false;
     }
-    
+
     /**
      * Check if a king is in check
      * @param {String} color - King color ('white' or 'black')
@@ -799,7 +808,7 @@ class ChessGame {
         const [kingRow, kingCol] = this.kingPositions[color];
         return this.isSquareAttacked(kingRow, kingCol, color);
     }
-    
+
     /**
      * Check if a position is within board bounds
      * @param {Number} row - Row index
@@ -809,7 +818,7 @@ class ChessGame {
     isInBounds(row, col) {
         return row >= 0 && row < 8 && col >= 0 && col < 8;
     }
-    
+
     /**
      * Truncate move history at current position
      */
@@ -817,11 +826,11 @@ class ChessGame {
         // Remove all moves after the current index
         this.moveHistory = this.moveHistory.slice(0, this.currentMoveIndex);
         this.boardStates = this.boardStates.slice(0, this.currentMoveIndex + 1);
-        
+
         // Clear the notation display from this point forward
         const notationBody = document.getElementById('notation-body');
         const rows = notationBody.getElementsByTagName('tr');
-        
+
         let rowIndex = Math.ceil(this.currentMoveIndex / 2);
         // If we're truncating after white's move, keep the row but clear black's move
         if (this.currentMoveIndex % 2 === 1 && rowIndex < rows.length) {
@@ -840,7 +849,7 @@ class ChessGame {
             }
         }
     }
-    
+
     /**
      * Execute a move on the board
      * @param {Number} fromRow - Source row
@@ -854,71 +863,71 @@ class ChessGame {
         const capturedPiece = this.board[toRow][toCol];
         const [pieceType, color] = piece.split('-');
         const opponentColor = color === 'white' ? 'black' : 'white';
-        
+
         let specialMove = '';
         let enPassantCapture = null;
         let promotedPiece = null;
         let castling = null;
-        
+
         // Reset en passant target
         const oldEnPassantTarget = this.enPassantTarget;
         this.enPassantTarget = null;
-        
+
         // Handle pawn special moves
         if (pieceType === 'pawn') {
             // Check for en passant capture
             if (fromCol !== toCol && !capturedPiece) {
                 const enPassantRow = color === 'white' ? toRow + 1 : toRow - 1;
                 enPassantCapture = [enPassantRow, toCol];
-                
+
                 // Capture the pawn
                 const capturedPawn = this.board[enPassantRow][toCol];
                 this.board[enPassantRow][toCol] = null;
                 this.capturedPieces[color].push(capturedPawn);
-                
+
                 specialMove = 'en passant';
             }
-            
+
             // Check for pawn promotion
             if ((color === 'white' && toRow === 0) || (color === 'black' && toRow === 7)) {
                 promotedPiece = promotionPiece || 'queen'; // Default to queen if not specified
                 this.board[fromRow][fromCol] = null;
                 this.board[toRow][toCol] = `${promotedPiece}-${color}`;
-                
+
                 specialMove = 'promotion';
             }
-            
+
             // Set en passant target for double move
             if (Math.abs(fromRow - toRow) === 2) {
                 const enPassantRow = color === 'white' ? toRow + 1 : toRow - 1;
                 this.enPassantTarget = [enPassantRow, toCol];
             }
         }
-        
+
         // Handle castling
         if (pieceType === 'king' && Math.abs(fromCol - toCol) > 1) {
             const isKingsideCastling = toCol > fromCol;
             const rookFromCol = isKingsideCastling ? 7 : 0;
             const rookToCol = isKingsideCastling ? 5 : 3;
-            
+
             // Move the rook
             const rook = this.board[fromRow][rookFromCol];
             this.board[fromRow][rookToCol] = rook;
             this.board[fromRow][rookFromCol] = null;
-            
+
             castling = isKingsideCastling ? 'kingside' : 'queenside';
             specialMove = `castling ${castling}`;
         }
-        
+
         // Update castling rights
         if (pieceType === 'king') {
             this.castlingRights[color].kingSide = false;
             this.castlingRights[color].queenSide = false;
-            
+
             // Update king position
             this.kingPositions[color] = [toRow, toCol];
         }
-        
+
         if (pieceType === 'rook') {
             if (fromRow === 7 && fromCol === 0 && color === 'white') {
                 this.castlingRights.white.queenSide = false;
@@ -930,7 +939,7 @@ class ChessGame {
                 this.castlingRights.black.kingSide = false;
             }
         }
-        
+
         // If a rook is captured, update castling rights
         if (capturedPiece === 'rook-white') {
             if (toRow === 7 && toCol === 0) this.castlingRights.white.queenSide = false;
@@ -939,7 +948,7 @@ class ChessGame {
             if (toRow === 0 && toCol === 0) this.castlingRights.black.queenSide = false;
             if (toRow === 0 && toCol === 7) this.castlingRights.black.kingSide = false;
         }
-        
+
         // Save move for history
         this.moveHistory.push({
             from: [fromRow, fromCol],
@@ -954,49 +963,52 @@ class ChessGame {
             castlingRights: JSON.parse(JSON.stringify(this.castlingRights)),
             specialMove
         });
-        
+
         // Capture piece if any
         if (capturedPiece && !enPassantCapture) {
             this.capturedPieces[color].push(capturedPiece);
         }
-        
+
         // Move piece (if not already handled by promotion)
         if (!promotedPiece) {
             this.board[toRow][toCol] = piece;
             this.board[fromRow][fromCol] = null;
         }
-        
+
         // Switch player
         this.currentPlayer = opponentColor;
-        
+
         // Check if opponent is in check or checkmate
         this.isInCheck.white = this.isKingInCheck('white');
         this.isInCheck.black = this.isKingInCheck('black');
-        
+
         // Check for checkmate or stalemate
         this.checkGameEndConditions();
-        
+
         // Store the new board state
         this.boardStates.push(this.deepCopyBoard(this.board));
-        
+
         // Set current move index to latest move
         this.currentMoveIndex = this.moveHistory.length;
-        
+
         // Update UI
         this.setupBoard();
         this.addMoveToHistory(fromRow, fromCol, toRow, toCol, piece, capturedPiece, specialMove);
-        
+
         // Update navigation buttons
         this.updateNavigationButtons();
+
+        // Autosave nach jedem Zug
+        this.saveGameToLocalStorage();
     }
-    
+
     /**
      * Check for checkmate or stalemate
      */
     checkGameEndConditions() {
         const currentColor = this.currentPlayer;
         const hasLegalMoves = this.playerHasLegalMoves(currentColor);
-        
+
         if (!hasLegalMoves) {
             if (this.isInCheck[currentColor]) {
                 // Checkmate
@@ -1014,7 +1026,7 @@ class ChessGame {
             this.gameStatus = '';
         }
     }
-    
+
     /**
      * Check if a player has any legal moves
      * @param {String} color - Player color ('white' or 'black')
@@ -1035,7 +1047,7 @@ class ChessGame {
         }
         return false;
     }
-    
+
     /**
      * Show the pawn promotion dialog
      * @param {Number} fromRow - Source row
@@ -1046,62 +1058,62 @@ class ChessGame {
     promptPromotion(fromRow, fromCol, toRow, toCol) {
         this.promotionPending = true;
         this.promotionMove = { fromRow, fromCol, toRow, toCol };
-        
+
         const modal = document.getElementById('promotion-modal');
         const piecesContainer = document.getElementById('promotion-pieces');
         piecesContainer.innerHTML = '';
-        
+
         const color = this.board[fromRow][fromCol].split('-')[1];
         const pieceTypes = ['queen', 'rook', 'bishop', 'knight'];
-        
+
         // Mapping function to convert our piece names to standard notation
         const getPieceImage = (piece) => {
             if (!piece) return null;
-            
+
             const pieceMap = {
                 'queen-white': 'wQ', 'rook-white': 'wR', 'bishop-white': 'wB', 'knight-white': 'wN',
                 'queen-black': 'bQ', 'rook-black': 'bR', 'bishop-black': 'bB', 'knight-black': 'bN'
             };
-            
+
             return pieceMap[piece];
         };
-        
+
         pieceTypes.forEach(type => {
             const pieceElement = document.createElement('div');
             pieceElement.classList.add('promotion-piece');
             pieceElement.dataset.piece = type;
-            
+
             const pieceFileName = getPieceImage(`${type}-${color}`);
             pieceElement.style.backgroundImage = `url('img/${pieceFileName}.png')`;
             piecesContainer.appendChild(pieceElement);
         });
-        
+
         modal.style.display = 'flex';
     }
-    
+
     /**
      * Complete a pawn promotion with the selected piece
      * @param {String} pieceType - Type of piece to promote to
      */
     completePromotion(pieceType) {
         const { fromRow, fromCol, toRow, toCol } = this.promotionMove;
-        
+
         // Close the modal
         document.getElementById('promotion-modal').style.display = 'none';
-        
+
         // Check if we're in the middle of the move history
         if (this.currentMoveIndex < this.moveHistory.length) {
             // Truncate move history and boardStates at current position
             this.truncateMoveHistory();
         }
-        
+
         // Complete the move with the promoted piece
         this.makeMove(fromRow, fromCol, toRow, toCol, pieceType);
-        
+
         this.promotionPending = false;
         this.promotionMove = null;
     }
-    
+
     /**
      * Add a move to the notation history
      * @param {Number} fromRow - Source row
@@ -1115,20 +1127,17 @@ class ChessGame {
     addMoveToHistory(fromRow, fromCol, toRow, toCol, piece, capturedPiece, specialMove = '') {
         const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
         const ranks = ['8', '7', '6', '5', '4', '3', '2', '1'];
-        
-        const fromSquare = files[fromCol] + ranks[fromRow];
-        const toSquare = files[toCol] + ranks[toRow];
-        
+
         // Get piece type (P, N, B, R, Q, K)
         let pieceType = piece.split('-')[0][0].toUpperCase();
         // Knights use 'N' instead of 'K' in algebraic notation
         if (pieceType === 'K' && piece.includes('knight')) pieceType = 'N';
         // Pawns have no prefix in algebraic notation
         if (pieceType === 'P') pieceType = '';
-        
+
         // Build the move in algebraic notation
         let notation = '';
-        
+
         // Handle castling
         if (specialMove.includes('castling')) {
             if (specialMove.includes('kingside')) {
@@ -1149,41 +1158,41 @@ class ChessGame {
                 // Non-captures
                 notation = pieceType + files[toCol] + ranks[toRow];
             }
-            
+
             // Add promotion
             if (specialMove.includes('promotion')) {
                 const promotedTo = piece.split('-')[0][0].toUpperCase();
                 notation += '=' + (promotedTo === 'K' && piece.includes('knight') ? 'N' : promotedTo);
             }
         }
-        
+
         // Add check or checkmate
         if (this.gameStatus.includes('Checkmate')) {
             notation += '#';
         } else if (this.isInCheck.white || this.isInCheck.black) {
             notation += '+';
         }
-        
+
         // Add to the table in the proper format
         const notationBody = document.getElementById('notation-body');
-        
+
         // Get the player color for this move
         const color = piece.split('-')[1];
-        
+
         if (color === 'white') {
             // Create a new row for white's move
             const tr = document.createElement('tr');
             tr.dataset.moveIndex = this.moveHistory.length;
-            
+
             const tdNum = document.createElement('td');
             tdNum.textContent = Math.floor(this.moveHistory.length / 2) + 1 + '.';
-            
+
             const tdWhite = document.createElement('td');
             tdWhite.textContent = notation;
-            
+
             const tdBlack = document.createElement('td');
             // Black's move will be filled in later
-            
+
             tr.appendChild(tdNum);
             tr.appendChild(tdWhite);
             tr.appendChild(tdBlack);
@@ -1199,15 +1208,15 @@ class ChessGame {
                 }
             }
         }
-        
+
         // Scroll to the bottom of the move history
         const moveHistory = document.getElementById('move-history');
         moveHistory.scrollTop = moveHistory.scrollHeight;
-        
+
         // Highlight the current move
         this.highlightNotationRow(this.moveHistory.length);
     }
-    
+
     /**
      * Highlight the current move in the notation history
      * @param {Number} moveIndex - Index of the move to highlight
@@ -1217,17 +1226,17 @@ class ChessGame {
         document.querySelectorAll('.notation-table td').forEach(cell => {
             cell.classList.remove('active');
         });
-        
+
         if (moveIndex <= 0) return;
-        
+
         // Calculate which row and column to highlight
         const rowIndex = Math.ceil(moveIndex / 2) - 1;
         const isWhiteMove = moveIndex % 2 === 1; // White moves are odd indices
         const columnIndex = isWhiteMove ? 1 : 2; // 1 for white, 2 for black
-        
+
         // Get the rows in the notation table
         const rows = document.getElementById('notation-body').getElementsByTagName('tr');
-        
+
         // Highlight the specific cell if it exists
         if (rowIndex >= 0 && rowIndex < rows.length) {
             const cells = rows[rowIndex].getElementsByTagName('td');
@@ -1236,14 +1245,14 @@ class ChessGame {
             }
         }
     }
-    
+
     /**
      * Navigate to a specific move in the game history
      * @param {Number} moveIndex - Index of the move to go to
      */
     goToMove(moveIndex) {
         if (moveIndex < 0 || moveIndex > this.moveHistory.length) return;
-        
+
         // Reset the game state first
         this.board = this.createInitialBoard();
         this.kingPositions = { white: [7, 4], black: [0, 4] };
@@ -1256,38 +1265,38 @@ class ChessGame {
         this.capturedPieces = { white: [], black: [] };
         this.gameOver = false;
         this.gameStatus = '';
-        
+
         // Replay all moves up to the requested index
         for (let i = 0; i < moveIndex; i++) {
             const move = this.moveHistory[i];
-            
+
             // Handle regular move
             const piece = this.board[move.from[0]][move.from[1]];
-            
+
             // Handle captures
             if (move.capturedPiece) {
                 this.capturedPieces[move.player].push(move.capturedPiece);
             }
-            
+
             // Handle en passant capture
             if (move.enPassantCapture) {
                 const capturedPawn = this.board[move.enPassantCapture[0]][move.enPassantCapture[1]];
                 this.board[move.enPassantCapture[0]][move.enPassantCapture[1]] = null;
                 this.capturedPieces[move.player].push(capturedPawn);
             }
-            
+
             // Handle castling
             if (move.castling) {
                 const row = move.from[0];
                 const rookFromCol = move.castling === 'kingside' ? 7 : 0;
                 const rookToCol = move.castling === 'kingside' ? 5 : 3;
-                
+
                 // Move the rook
                 const rook = this.board[row][rookFromCol];
                 this.board[row][rookToCol] = rook;
                 this.board[row][rookFromCol] = null;
             }
-            
+
             // Handle pawn promotion
             if (move.promotedPiece) {
                 this.board[move.to[0]][move.to[1]] = `${move.promotedPiece}-${move.player}`;
@@ -1297,30 +1306,30 @@ class ChessGame {
                 this.board[move.to[0]][move.to[1]] = piece;
                 this.board[move.from[0]][move.from[1]] = null;
             }
-            
+
             // Update king position if king moved
             if (piece && piece.startsWith('king')) {
                 this.kingPositions[move.player] = [move.to[0], move.to[1]];
             }
-            
+
             // Update castling rights
             if (move.castlingRights) {
                 this.castlingRights = JSON.parse(JSON.stringify(move.castlingRights));
             }
-            
+
             // Set en passant target
             this.enPassantTarget = move.enPassantTarget;
         }
-        
+
         this.currentMoveIndex = moveIndex;
-        
+
         // Determine the current player
         this.currentPlayer = moveIndex % 2 === 0 ? 'white' : 'black';
-        
+
         // Update check status
         this.isInCheck.white = this.isKingInCheck('white');
         this.isInCheck.black = this.isKingInCheck('black');
-        
+
         // Check for game end conditions if at the latest move
         if (moveIndex === this.moveHistory.length) {
             this.checkGameEndConditions();
@@ -1328,13 +1337,13 @@ class ChessGame {
             this.gameOver = false;
             this.gameStatus = '';
         }
-        
+
         // Update UI
         this.setupBoard();
         this.highlightNotationRow(moveIndex);
         this.updateNavigationButtons();
     }
-    
+
     /**
      * Update the navigation buttons based on current position
      */
@@ -1345,7 +1354,7 @@ class ChessGame {
         document.getElementById('next-move').disabled = this.currentMoveIndex === this.moveHistory.length;
         document.getElementById('last-move').disabled = this.currentMoveIndex === this.moveHistory.length;
     }
-    
+
     /**
      * Flip the board orientation
      */
@@ -1353,7 +1362,7 @@ class ChessGame {
         this.boardOrientation = this.boardOrientation === 'white' ? 'black' : 'white';
         this.setupBoard();
     }
-    
+
     /**
      * Reset the game to initial state
      */
@@ -1375,52 +1384,55 @@ class ChessGame {
             black: { kingSide: true, queenSide: true }
         };
         this.enPassantTarget = null;
-        
+
         // Reset move history display
         document.getElementById('notation-body').innerHTML = '';
-        
+
         this.setupBoard();
         this.updateNavigationButtons();
+
+        // Gespeicherten Spielstand löschen, wenn ein neues Spiel gestartet wird
+        this.clearSavedGame();
     }
-    
+
     /**
      * Update the turn indicator display
      */
     updateTurnIndicator() {
         document.getElementById('turn-indicator').textContent = `Current Turn: ${this.currentPlayer.charAt(0).toUpperCase() + this.currentPlayer.slice(1)}`;
     }
-    
+
     /**
      * Update the game status display
      */
     updateGameStatus() {
         document.getElementById('game-status').textContent = this.gameStatus;
     }
-    
+
     /**
      * Update the captured pieces display
      */
     updateCapturedPieces() {
         const whiteContainer = document.getElementById('captured-white');
         const blackContainer = document.getElementById('captured-black');
-        
+
         whiteContainer.innerHTML = '';
         blackContainer.innerHTML = '';
-        
+
         // Mapping function to convert our piece names to standard notation
         const getPieceImage = (piece) => {
             if (!piece) return null;
-            
+
             const pieceMap = {
-                'pawn-white': 'wP', 'rook-white': 'wR', 'knight-white': 'wN', 
+                'pawn-white': 'wP', 'rook-white': 'wR', 'knight-white': 'wN',
                 'bishop-white': 'wB', 'queen-white': 'wQ', 'king-white': 'wK',
-                'pawn-black': 'bP', 'rook-black': 'bR', 'knight-black': 'bN', 
+                'pawn-black': 'bP', 'rook-black': 'bR', 'knight-black': 'bN',
                 'bishop-black': 'bB', 'queen-black': 'bQ', 'king-black': 'bK'
             };
-            
+
             return pieceMap[piece];
         };
-        
+
         this.capturedPieces.white.forEach(piece => {
             const pieceElement = document.createElement('div');
             pieceElement.classList.add('captured-piece');
@@ -1428,7 +1440,7 @@ class ChessGame {
             pieceElement.style.backgroundImage = `url('img/${pieceFileName}.png')`;
             whiteContainer.appendChild(pieceElement);
         });
-        
+
         this.capturedPieces.black.forEach(piece => {
             const pieceElement = document.createElement('div');
             pieceElement.classList.add('captured-piece');
@@ -1436,5 +1448,107 @@ class ChessGame {
             pieceElement.style.backgroundImage = `url('img/${pieceFileName}.png')`;
             blackContainer.appendChild(pieceElement);
         });
+    }
+
+    /**
+     * Spielstand im localStorage speichern
+     */
+    saveGameToLocalStorage() {
+        try {
+            // PGN generieren
+            const pgn = generatePGN(
+                this.moveHistory,
+                this.gameStatus,
+                this.currentPlayer,
+                document.getElementById('notation-body')
+            );
+
+            // Zusätzliche Spieldaten für die Wiederherstellung
+            const gameState = {
+                pgn: pgn,
+                timestamp: new Date().toISOString(),
+                capturedPieces: this.capturedPieces,
+                currentMoveIndex: this.currentMoveIndex,
+                boardOrientation: this.boardOrientation,
+                gameOver: this.gameOver
+            };
+
+            // Im localStorage speichern
+            localStorage.setItem('pureChess_savedGame', JSON.stringify(gameState));
+        } catch (error) {
+            console.error('Error saving game:', error);
+        }
+    }
+
+    /**
+     * Spielstand aus dem localStorage laden
+     * @returns {Boolean} - Ob ein Spielstand geladen wurde
+     */
+    loadGameFromLocalStorage() {
+        try {
+            const savedGameJSON = localStorage.getItem('pureChess_savedGame');
+            if (!savedGameJSON) {
+                // Kein gespeichertes Spiel gefunden
+                return false;
+            }
+
+            const gameState = JSON.parse(savedGameJSON);
+
+            // PGN laden
+            loadPGN(gameState.pgn, this);
+
+            // Zusätzliche Spieldetails wiederherstellen
+            if (gameState.boardOrientation) {
+                this.boardOrientation = gameState.boardOrientation;
+            }
+
+            if (gameState.currentMoveIndex !== undefined) {
+                // Gehe zum gespeicherten Zugindex
+                this.goToMove(gameState.currentMoveIndex);
+            }
+
+            // Brett aktualisieren
+            this.setupBoard();
+
+            return true;
+        } catch (error) {
+            console.error('Error loading game:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Gespeicherten Spielstand löschen
+     */
+    clearSavedGame() {
+        localStorage.removeItem('pureChess_savedGame');
+    }
+
+    /**
+     * Prüfen, ob ein gespeicherter Spielstand existiert
+     * @returns {Boolean} - Ob ein gespeicherter Spielstand existiert
+     */
+    hasSavedGame() {
+        return localStorage.getItem('pureChess_savedGame') !== null;
+    }
+
+    /**
+     * Temporäre Nachricht im Spielstatus anzeigen
+     * @param {String} message - Anzuzeigende Nachricht
+     * @param {Number} duration - Anzeigedauer in Millisekunden
+     */
+    showTemporaryMessage(message, duration = 3000) {
+        const gameStatus = document.getElementById('game-status');
+        const originalMessage = gameStatus.textContent;
+
+        gameStatus.textContent = message;
+
+        setTimeout(() => {
+            // Stelle die ursprüngliche Nachricht wieder her
+            if (this.gameStatus === message) {
+                gameStatus.textContent = originalMessage;
+                this.gameStatus = originalMessage;
+            }
+        }, duration);
     }
 }
