@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Game</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="header">
+        <h1>Chess Game</h1>
+        <p>Play chess against yourself or a friend</p>
+    </div>
+    
+    <div class="game-container">
+        <div class="board-container">
+            <div class="chessboard" id="chessboard"></div>
+        </div>
+        
+        <div class="game-info">
+            <div class="turn-indicator" id="turn-indicator">Current Turn: White</div>
+            <div class="game-status" id="game-status"></div>
+            
+            <div class="captured-pieces">
+                <div class="captured-white" id="captured-white"></div>
+                <div class="captured-black" id="captured-black"></div>
+            </div>
+            
+            <div class="move-history" id="move-history">
+                <table class="notation-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>White</th>
+                            <th>Black</th>
+                        </tr>
+                    </thead>
+                    <tbody id="notation-body">
+                        <!-- Move notation will be added here -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="move-navigation">
+                <button id="first-move">|&lt;</button>
+                <button id="prev-move">&lt;</button>
+                <button id="next-move">&gt;</button>
+                <button id="last-move">&gt;|</button>
+            </div>
+            
+            <div class="game-buttons">
+                <button id="new-game">New Game</button>
+                <button id="flip-board">Flip Board</button>
+                <button id="save-pgn">Save PGN</button>
+                <button id="load-pgn-btn">Load PGN</button>
+                <input type="file" id="pgn-file-input" accept=".pgn,text/plain" style="display: none;">
+            </div>
+        </div>
+    </div>
+    
+    <!-- Pawn Promotion Dialog -->
+    <div class="promotion-modal" id="promotion-modal">
+        <div class="promotion-container">
+            <h2>Choose a piece for pawn promotion</h2>
+            <div class="promotion-pieces" id="promotion-pieces">
+                <!-- Promotion pieces will be added here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Load JavaScript modules -->
+    <script src="pgn.js"></script>
+    <script src="chessGame.js"></script>
+    <script>
+        // Initialize the game when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            const game = new ChessGame();
+        });
+    </script>
+</body>
+</html>
