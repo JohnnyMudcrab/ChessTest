@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pure Chess</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="css/styles.css">
     <link rel="icon" type="image/svg+xml" href="img/chess-favicon.svg">
 </head>
 
@@ -73,15 +73,8 @@
         </div>
     </div>
 
-    <!-- Load JavaScript modules -->
-    <script src="pgn.js"></script>
-    <script src="chessGame.js"></script>
-    <script>
-        // Initialize the game when the page loads
-        document.addEventListener('DOMContentLoaded', () => {
-            const game = new ChessGame();
-        });
-    </script>
+    <!-- Load JavaScript as module -->
+    <script type="module" src="js/main.js"></script>
 </body>
 
 </html>
