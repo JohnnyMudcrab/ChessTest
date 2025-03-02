@@ -10,14 +10,28 @@ import { PGNService } from './services/PGNService.js';
 import { StorageService } from './services/StorageService.js';
 import { handleError } from './utils/ErrorHandler.js';
 import { DebugHelper } from './utils/DebugHelper.js';
+import { LoggingService } from './utils/LoggingService.js';
+
+// Set this to true for production builds
+const IS_PRODUCTION = false;
 
 // Initialize the application when the DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
   try {
-    // Initialize debug helper
-    DebugHelper.init();
+    // Initialize logging with appropriate level
+    // Use DEBUG in development, ERROR in production
+    const initialLogLevel = IS_PRODUCTION ? 
+      LoggingService.LOG_LEVELS.ERROR : 
+      LoggingService.LOG_LEVELS.DEBUG;
     
-    console.log('Initializing Pure Chess application...');
+    LoggingService.init(initialLogLevel, IS_PRODUCTION);
+    
+    // Initialize debug helper if not in production
+    if (!IS_PRODUCTION) {
+      DebugHelper.init();
+    }
+    
+    LoggingService.info('Initializing Pure Chess application');
     
     // Initialize models
     const board = new Board();
@@ -47,8 +61,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize the game
     gameController.initialize();
     
-    // Log initial state
-    DebugHelper.logGameState(gameState);
+    // Log initial state (only in debug or higher)
+    LoggingService.debug('Initial game state:', gameState);
     
     // Check for saved game
     if (storageService.hasSavedGame()) {
@@ -64,21 +78,24 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
     
-    // Add a global reference for debugging
-    window.chessGame = {
-      controller: gameController,
-      board: board,
-      gameState: gameState,
-      debug: DebugHelper
-    };
+    // Add a global reference for debugging (only in development)
+    if (!IS_PRODUCTION) {
+      window.chessGame = {
+        controller: gameController,
+        board: board,
+        gameState: gameState,
+        debug: DebugHelper,
+        log: LoggingService
+      };
+    }
     
     // Log initialization success
-    console.log('Pure Chess initialized successfully');
+    LoggingService.info('Pure Chess initialized successfully');
     
   } catch (error) {
     handleError(error, (message) => {
       alert(`Failed to initialize chess game: ${message}`);
-      console.error('Initialization error:', error);
+      LoggingService.error('Initialization error:', error);
     });
   }
 });
