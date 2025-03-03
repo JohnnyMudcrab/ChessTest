@@ -6,7 +6,7 @@ RED="\033[0;31m"
 YELLOW="\033[1;33m"
 RESET="\033[0m"
 
-echo -e "${GREEN}Deployment Script${RESET}"
+echo -e "${GREEN}PureChess Deployment Script${RESET}"
 echo "------------------------------"
 
 # Check if javascript-obfuscator is installed
@@ -81,6 +81,62 @@ find js -name "*.js" | while read js_file; do
     obfuscate_js "$js_file" "$output_file"
 done
 
+# Copy server configuration files for proper MIME types
+echo -e "${YELLOW}Copying server configuration files for proper MIME types...${RESET}"
+
+# Check and copy _headers file (Cloudflare Pages)
+if [ -f "_headers" ]; then
+    cp _headers upload/
+    echo "  Copied _headers file for Cloudflare Pages"
+else
+    echo -e "${RED}  Warning: _headers file not found in project root${RESET}"
+    echo "  Creating _headers file in upload directory..."
+    cat >upload/_headers <<EOL
+/*.js
+  Content-Type: application/javascript
+EOL
+fi
+
+# Check and copy .htaccess file (Apache)
+if [ -f ".htaccess" ]; then
+    cp .htaccess upload/
+    echo "  Copied .htaccess file for Apache servers"
+else
+    echo -e "${RED}  Warning: .htaccess file not found in project root${RESET}"
+    echo "  Creating .htaccess file in upload directory..."
+    cat >upload/.htaccess <<EOL
+<IfModule mod_mime.c>
+  AddType application/javascript .js
+</IfModule>
+
+<IfModule mod_headers.c>
+  <FilesMatch "\.(js)$">
+    Header set Content-Type "application/javascript"
+  </FilesMatch>
+</IfModule>
+EOL
+fi
+
+# Check and copy web.config file (IIS)
+if [ -f "web.config" ]; then
+    cp web.config upload/
+    echo "  Copied web.config file for IIS servers"
+else
+    echo -e "${RED}  Warning: web.config file not found in project root${RESET}"
+    echo "  Creating web.config file in upload directory..."
+    cat >upload/web.config <<EOL
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+  <system.webServer>
+    <staticContent>
+      <remove fileExtension=".js" />
+      <mimeMap fileExtension=".js" mimeType="application/javascript" />
+    </staticContent>
+  </system.webServer>
+</configuration>
+EOL
+fi
+
 echo -e "${GREEN}Deployment preparation completed!${RESET}"
 echo "All files are now available in the 'upload' directory."
 echo "------------------------------"
@@ -92,3 +148,4 @@ echo "  JavaScript files: $js_count"
 echo "  CSS files: $(ls -1 css/*.css 2>/dev/null | wc -l)"
 echo "  HTML files: $(ls -1 *.html 2>/dev/null | wc -l)"
 echo "  Image files: $(find img -type f | wc -l)"
+echo "  Server configuration files: 3 (_headers, .htaccess, web.config)"
